@@ -72,14 +72,14 @@ def score_interface(pdb_file, binder_chain="B"):
     interface_packstat = iam.get_interface_packstat() # interface pack stat score
     interface_dG_SASA_ratio = interfacescore.dG_dSASA_ratio * 100 # ratio of dG/dSASA (normalised energy for interface area size)
     buns_filter = XmlObjects.static_get_filter('<BuriedUnsatHbonds report_all_heavy_atom_unsats="true" scorefxn="scorefxn" ignore_surface_res="false" use_ddG_style="true" dalphaball_sasa="1" probe_radius="1.1" burial_cutoff_apo="0.2" confidence="0" />')
-    interface_delta_unsat_hbonds = buns_filter.report_sm(pose)
+    #interface_delta_unsat_hbonds = buns_filter.report_sm(pose)
 
-    if interface_nres != 0:
-        interface_hbond_percentage = (interface_interface_hbonds / interface_nres) * 100 # Hbonds per interface size percentage
-        interface_bunsch_percentage = (interface_delta_unsat_hbonds / interface_nres) * 100 # Unsaturated H-bonds per percentage
-    else:
-        interface_hbond_percentage = None
-        interface_bunsch_percentage = None
+    #if interface_nres != 0:
+    #    interface_hbond_percentage = (interface_interface_hbonds / interface_nres) * 100 # Hbonds per interface size percentage
+    #    interface_bunsch_percentage = (interface_delta_unsat_hbonds / interface_nres) * 100 # Unsaturated H-bonds per percentage
+    #else:
+    #    interface_hbond_percentage = None
+    #    interface_bunsch_percentage = None
 
     # calculate binder energy score
     chain_design = ChainSelector(binder_chain)
