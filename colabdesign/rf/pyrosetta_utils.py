@@ -133,9 +133,9 @@ def score_interface(pdb_file, binder_chain="B"):
     'interface_hydrophobicity': interface_hydrophobicity,
     'interface_nres': interface_nres,
     'interface_interface_hbonds': interface_interface_hbonds,
-    'interface_hbond_percentage': interface_hbond_percentage,
-    'interface_delta_unsat_hbonds': interface_delta_unsat_hbonds,
-    'interface_delta_unsat_hbonds_percentage': interface_bunsch_percentage
+    #'interface_hbond_percentage': interface_hbond_percentage,
+    #'interface_delta_unsat_hbonds': interface_delta_unsat_hbonds,
+    #'interface_delta_unsat_hbonds_percentage': interface_bunsch_percentage
     }
 
     # round to two decimal places
