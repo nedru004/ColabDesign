@@ -74,11 +74,11 @@ def score_interface(pdb_file, binder_chain="B"):
     buns_filter = XmlObjects.static_get_filter('<BuriedUnsatHbonds report_all_heavy_atom_unsats="true" scorefxn="scorefxn" ignore_surface_res="false" use_ddG_style="true" dalphaball_sasa="1" probe_radius="1.1" burial_cutoff_apo="0.2" confidence="0" />')
     #interface_delta_unsat_hbonds = buns_filter.report_sm(pose)
 
-    #if interface_nres != 0:
-    #    interface_hbond_percentage = (interface_interface_hbonds / interface_nres) * 100 # Hbonds per interface size percentage
+    if interface_nres != 0:
+        interface_hbond_percentage = (interface_interface_hbonds / interface_nres) * 100 # Hbonds per interface size percentage
     #    interface_bunsch_percentage = (interface_delta_unsat_hbonds / interface_nres) * 100 # Unsaturated H-bonds per percentage
-    #else:
-    #    interface_hbond_percentage = None
+    else:
+        interface_hbond_percentage = None
     #    interface_bunsch_percentage = None
 
     # calculate binder energy score
@@ -133,7 +133,7 @@ def score_interface(pdb_file, binder_chain="B"):
     'interface_hydrophobicity': interface_hydrophobicity,
     'interface_nres': interface_nres,
     'interface_interface_hbonds': interface_interface_hbonds,
-    #'interface_hbond_percentage': interface_hbond_percentage,
+    'interface_hbond_percentage': interface_hbond_percentage,
     #'interface_delta_unsat_hbonds': interface_delta_unsat_hbonds,
     #'interface_delta_unsat_hbonds_percentage': interface_bunsch_percentage
     }
