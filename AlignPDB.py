@@ -128,7 +128,7 @@ class AlignPDB:
         
         return atoms
 
-    def align_pdb(self):
+    def align_pdb(self, visualize: bool = True):
         """ Overarching function calling other functions to 
             0. Prep Work for Alignment -> Extract alpha carbon atoms of both aligned and measured residues
             1. Align reference & design PDBs
@@ -199,10 +199,14 @@ class AlignPDB:
             print("The Aligned Residues likely caused a major distortion of the measured residues, which could abolish function.")
         
         pymol_residue_indices = ', '.join(f"{start}-{end}" for start, end in self.design_measured_residues)
+
+        # 4. Visualize Aligned Structures
+        if visualize:
+            self.visualize_aligned_proteins(file_a= self.ref_pdb_path,
+                                            file_b_aligned= aligned_pdb_save_path,
+                                            measured_residues_indices= pymol_residue_indices)
         
-        self.visualize_aligned_proteins(file_a= self.ref_pdb_path,
-                                        file_b_aligned= aligned_pdb_save_path,
-                                        measured_residues_indices= pymol_residue_indices)
+        return aligned_rmsd, measured_rmsd, aligned_pdb_save_path
 
 
 
