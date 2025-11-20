@@ -7,8 +7,7 @@ from ColabDesign.Scfv import Scfv
 class Eval:
     """ Class to evaluate designed ScFv sequences against target sequences
     """
-    def __init__(self, mpnn_csv_path: str, ref_anti_fasta_path: str, ref_scfv_fasta_path: str, linker_dict: dict, orientation_dict: dict, scheme = 'martin',
-                 ref_name: str = ''):
+    def __init__(self, mpnn_csv_path: str, ref_anti_fasta_path: str, ref_scfv_fasta_path: str, linker_dict: dict, orientation_dict: dict, scheme = 'martin'):
         """ Initialization function for Eval class
         Args:
             mpnn_csv_path (str): Path to CSV file containing designed scFv sequences from MPNN
@@ -22,7 +21,6 @@ class Eval:
         self.ref_paired_seq_annotator = Scfv(scheme=scheme)
         self.ref_scfv_seq_annotator = Scfv(scheme=scheme)
         self.linker_dict = linker_dict
-        self.ref_name = ref_name
         self.orientation_dict = orientation_dict
     
     def load_refs(self, target_dict: dict):
@@ -43,13 +41,18 @@ class Eval:
         annotated_ref_seqs = {**self.annotated_ref_paired_seqs, **self.annotated_ref_scfv_seqs}
         self.annotated_ref_seqs = annotated_ref_seqs
         return self.annotated_ref_seqs
-    
-    def load_designs(self):
+
+    def load_designs(self, df_designs: pd.DataFrame, ref_design_name: str = ''):
         """ Function to load designed scFv sequences from MPNN CSV file
         Returns:
             dict: Dictionary with keys being scFv IDs and values being sequences
         """ 
         # Extract orientation, location of heavy FRs & CDRs, and location of light FRs & CDRs from reference name
+        if ref_design_name != '':
+            self.ref_name = ref_design_name
+        else:
+            raise ValueError("Reference design scfv ID must be provided to load designs.")
+        
         for ref_name, orientation in self.orientation_dict.items():
             if self.ref_name in ref_name:
                 self.design_orientation = orientation
@@ -64,12 +67,15 @@ class Eval:
             col_names = {0 : 'light_seq', 1: 'heavy_seq'}
 
         # Load designed scFv sequences from MPNN CSV
-        df_designs = pd.read_csv(self.mpnn_csv_path, index_col=0)
+        if df_designs is None:
+            df_designs = pd.read_csv(self.mpnn_csv_path, index_col=0)
+        else:
+            df_designs = df_designs.copy()
         df_designs['scfv_seq'] = df_designs['seq'].str.split('/').str[0]
-        df_seqs = df_designs['scfv_seq'].str.split(self.linker, expand=True).rename(columns=col_names)
+        df_seqs = df_designs['scfv_seq'].str.split(self.linker_dict[self.ref_name], expand=True).rename(columns=col_names)
         df_designs = pd.concat([df_designs, df_seqs], axis=1)
         # Sort by RFDiffusion Design First and then PTM from best to worst
-        df_designs.sort_values(by = ['design', 'ptm'], ascending = [True, False], inplace = True)  
+        df_designs.sort_values(by = ['rmsd', 'ptm'], ascending = [True, False], inplace = True)  
         df_designs_dict = df_designs[['design', 'n', 'ptm', 'scfv_seq', 'heavy_seq', 'light_seq']].to_dict(orient='records')
 
         
@@ -88,7 +94,7 @@ class Eval:
             
             # Annotate designed scFv sequences chain independent properties
             annotated_design_seqs[scfv_id]['orientation'] = self.design_orientation
-            annotated_design_seqs[scfv_id]['linker'] = self.linker
+            annotated_design_seqs[scfv_id]['linker'] = self.linker_dict[self.ref_name]
 
             # Annotate designed scFv sequences chain dependent properties: region locations, region sequences, chain seq
             annotated_design_seqs[scfv_id]['heavy']['region_loc_dict'] = self.design_heavy_region_loc_dict
@@ -287,7 +293,7 @@ class Eval:
             if ref_name in key: # Indicates ref name is part of the key for either the ref scfv or ref paired seq
                 if 'manod' in key or 'scfv' in key:
                     ref_design_key = key
-                else:
+                elif ref_name == key:
                     ref_paired_key = key
 
         # Get correct reference paired Ab sequence dictionary & merge annotated ref scFv & designed scfv seq dicts
@@ -320,7 +326,7 @@ class Eval:
             if ref_name in key: # Indicates ref name is part of the key for either the ref scfv or ref paired seq
                 if 'manod' in key or 'scfv' in key:
                     ref_design_key = key
-                else:
+                elif ref_name == key:
                     ref_paired_key = key
         
         # Create reference (paired and ref_scfv) and design (RFDiffusion + MPNN, and ref_scfv) sequence dictionaries
