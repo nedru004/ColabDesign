@@ -1,3 +1,4 @@
+from hmac import new
 import numpy as np
 import antpack
 from antpack import PairedChainAnnotator
@@ -33,15 +34,30 @@ class Scfv:
 
         return self.scfv_dict, self.scfv_ids
     
-    def update_seqs(self, new_scfv_dict: dict):
+    def update_seqs(self, seq_dict: dict = {}, seq_id: str = "", seq: str = ""):
         """ Function to update scfv sequences with new sequences stored in a dictionary
         Args:
-            new_scfv_dict (dict): Dictionary with keys being scFv or paired seq IDs and values being sequences (heavy + linker + light or vice versa or regular paired sequences)
+            seq_dict (dict): Dictionary with keys being scFv or paired seq IDs and values being sequences (heavy + linker + light or vice versa or regular paired sequences)
+            seq_id (str): ID of scFv or paired sequence to update
+            seq (str): New scFv seq or paired sequence
         Returns:
             dict: updated dictionary of scfv and/or paired sequences with sequences
         """ 
-        self.scfv_dict.update(new_scfv_dict)
-        self.scfv_ids = list(self.scfv_dict.keys())
+        # If no new_seq_dict is provided, use seq_id and seq to create a new dictionary
+        if seq_dict == {}:
+            seq_dict = {seq_id : seq} if seq_id != "" and seq != "" else seq_dict
+        
+        # If seq_dict, seq_id, and seq are all not provided, raise error
+        elif seq_dict == {} and seq_id == "" and seq == "":
+            raise ValueError("No new sequences provided to update scfv_dict with")
+        
+        # Only set scfv_dict and scfv_ids if they are not already set, allows for updating later
+        if self.scfv_dict is None or len(self.scfv_dict) == 0:
+            self.scfv_dict = seq_dict
+            self.scfv_ids = list(self.scfv_dict.keys())
+        else: # If already set, update with new sequences
+            self.scfv_dict.update(seq_dict)
+            self.scfv_ids = list(self.scfv_dict.keys())
         return self.scfv_dict
 
     def annotate_seqs(self, linker_dict, orientation_dict: dict, target_dict: dict, generate_motif_commands: bool = True):
