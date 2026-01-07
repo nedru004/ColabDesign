@@ -379,6 +379,58 @@ class _af_prep:
   
     self._prep_model(**kwargs)
 
+  def _prep_inference(self, sequences, copies=1, **kwargs):
+    '''
+    prep inputs for inference (prediction)
+    ---------------------------------------------------
+    -sequences: str or list of str (amino acid sequences)
+    -copies: int (number of copies for homooligomers)
+    ---------------------------------------------------
+    '''
+    # 1. Standardize Inputs (str -> list)
+    if isinstance(sequences, str): sequences = [sequences]
+    
+    # 2. Handle Homooligomers (multiply list by copies)
+    if copies > 1:
+      sequences = sequences * copies
+
+    # 3. Calculate Dimensions
+    self._lengths = [len(s) for s in sequences]
+    self._len = sum(self._lengths)
+    self._num = 1 # Single sequence (MSA depth = 1)
+
+    # 4. Initialize Empty Features
+    # This creates the blank tensors (msa_feat, etc.)
+    self._inputs = self._prep_features(num_res=self._len, num_seq=self._num)
+
+    # 5. Set Chain IDs (Critical for Multimer)
+    # get_multi_id is defined at the bottom of this file, so we can call it directly
+    ids = get_multi_id(self._lengths, homooligomer=(copies > 1))
+    self._inputs.update(ids)
+
+    # 6. Encode Sequence
+    aatype_list = []
+    for seq in sequences:
+      # specific map for letters -> integers
+      aatype_list.append(
+          np.array([residue_constants.restype_order.get(aa, 20) for aa in seq])
+      )
+    full_aatype = np.concatenate(aatype_list)
+
+    # 7. Set Input Dictionary
+    self._inputs["batch"] = {"aatype": full_aatype}
+    self._inputs["seq_mask"] = np.ones(self._len)
+    self._wt_aatype = full_aatype
+    
+    # Create dummy PDB object (needed for utils.save_pdb)
+    self._pdb = {"batch": self._inputs["batch"], 
+                 "residue_index": np.arange(self._len),
+                 "lengths": self._lengths}
+
+    # 8. Final Model Prep
+    self._prep_model(**kwargs)
+    print(f"Protocol: INFERENCE | Chains: {len(sequences)} | Total Length: {self._len}")
+
 #######################
 # utils
 #######################
