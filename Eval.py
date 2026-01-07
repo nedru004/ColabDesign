@@ -75,8 +75,13 @@ class Eval:
         df_seqs = df_designs['scfv_seq'].str.split(self.linker_dict[self.ref_name], expand=True).rename(columns=col_names)
         df_designs = pd.concat([df_designs, df_seqs], axis=1)
         # Sort by RFDiffusion Design First and then PTM from best to worst
-        df_designs.sort_values(by = ['rmsd', 'ptm'], ascending = [True, False], inplace = True)  
-        df_designs_dict = df_designs[['design', 'n', 'ptm', 'scfv_seq', 'heavy_seq', 'light_seq']].to_dict(orient='records')
+        df_designs.sort_values(by = ['rmsd', 'ptm'], ascending = [True, False], inplace = True)
+        # Convert DataFrame to dictionary
+        # If seq_id column is present, include it in df_designs_dict
+        if 'seq_id' in df_designs.columns:
+            df_designs_dict = df_designs[['seq_id', 'design', 'n', 'ptm', 'scfv_seq', 'heavy_seq', 'light_seq']].to_dict(orient='records')
+        else:
+            df_designs_dict = df_designs[['design', 'n', 'ptm', 'scfv_seq', 'heavy_seq', 'light_seq']].to_dict(orient='records')
 
         
         
@@ -90,6 +95,11 @@ class Eval:
             light_seq = record['light_seq']
 
             # Initialize design scFv entry
+            if 'seq_id' in record:
+                scfv_id = f"{record['seq_id']}"
+            else:
+                scfv_id = scfv_id
+            
             annotated_design_seqs[scfv_id] = {'heavy' : {}, 'light' : {}, 'seq' : '', 'orientation' : '', 'linker' : ''}
             
             # Annotate designed scFv sequences chain independent properties
