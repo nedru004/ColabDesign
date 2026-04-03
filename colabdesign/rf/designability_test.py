@@ -51,6 +51,7 @@ def main(argv):
   ag.add(["rm_aa="],               "C",    str, ["disable specific amino acids from being sampled"])
   ag.add(["num_designs="  ],         1,    int, ["number of designs to evaluate"])
   ag.add(["mpnn_sampling_temp=" ], 0.1,  float, ["sampling temperature used by proteinMPNN"])
+  ag.add(["af_params_dir=" ],      ".",    str, ["directory containing alphafold params"])
   ag.txt("-------------------------------------------------------------------------------------")
   o = ag.parse(argv)
 
@@ -84,7 +85,8 @@ def main(argv):
   flags = {"initial_guess":o.initial_guess,
            "best_metric":"rmsd",
            "use_multimer":o.use_multimer,
-           "model_names":["model_1_multimer_v3" if o.use_multimer else "model_1_ptm"]}
+           "model_names":["model_1_multimer_v3" if o.use_multimer else "model_1_ptm"],
+           "data_dir": o.af_params_dir}
 
   if sum(both_chains) == 0 and sum(fixed_chains) > 0 and sum(free_chains) > 0:
     protocol = "binder"
