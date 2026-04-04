@@ -124,7 +124,7 @@ def fix_contigs(contigs,parsed_pdb):
         # sample length
         s,e = x.split("-")
         m = np.random.randint(int(s),int(e)+1)
-        Y.append(f"{m}-{m}")
+        Y.append("x")
       elif x.isnumeric() and x != "0":
         Y.append(f"{x}-{x}")
     return "/".join(Y)
