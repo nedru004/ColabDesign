@@ -170,21 +170,21 @@ def main(argv):
     
     # 2. Extract logits (raw scores) and take only the first 20 AAs
     # The shape is (num_seqs, L, 21), we slice to (num_seqs, L, 20).
-    logits_20_aa = mpnn_output["logits"][..., :20]
+    #logits_20_aa = mpnn_output["logits"][..., :20]
 
     #2.5 Save the raw logits as well
-    logits_filename = f"{o.loc}/design{m}_mpnn_logits.npy"
-    np.save(logits_filename, logits_20_aa)
-    print(f"MPNN logits saved to {logits_filename} (Shape: {logits_20_aa.shape})")
+    #logits_filename = f"{o.loc}/design{m}_mpnn_logits.npy"
+    #np.save(logits_filename, logits_20_aa)
+    #print(f"MPNN logits saved to {logits_filename} (Shape: {logits_20_aa.shape})")
     
     # 3. Convert logits to probabilities using softmax (over the last axis: AAs)
     # The result is the Position-Specific Probability Matrix (PSPM)
-    probs = softmax(logits_20_aa, axis=-1)
+    #probs = softmax(logits_20_aa, axis=-1)
     
     # 4. Save the probability matrix for the current design 'm'
-    probs_filename = f"{o.loc}/design{m}_mpnn_probs.npy"
-    np.save(probs_filename, probs)
-    print(f"MPNN probabilities saved to {probs_filename} (Shape: {probs.shape})")
+    #probs_filename = f"{o.loc}/design{m}_mpnn_probs.npy"
+    #np.save(probs_filename, probs)
+    #print(f"MPNN probabilities saved to {probs_filename} (Shape: {probs.shape})")
     
     # 5. Append the mpnn_output (which contains sequences, scores, etc.) to the outs list
     outs.append(mpnn_output)
