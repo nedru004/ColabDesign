@@ -2,14 +2,12 @@ import os,sys
 
 from colabdesign.mpnn import mk_mpnn_model
 from colabdesign.af import mk_af_model
-from colabdesign.shared.protein import pdb_to_string
 from colabdesign.shared.parse_args import parse_args
 
 import pandas as pd
 import numpy as np
 from string import ascii_uppercase, ascii_lowercase
 alphabet_list = list(ascii_uppercase+ascii_lowercase)
-from scipy.special import softmax
 
 def get_info(contig):
   F = []
@@ -37,33 +35,7 @@ def parse_contig_string(contigs_str):
       contigs.append("/".join(contig))
   return contigs
 
-def load_design_manifest(path):
-  df = pd.read_csv(path)
-  contig_col = "contig" if "contig" in df.columns else "contigs"
-  if "pdb" not in df.columns or contig_col not in df.columns:
-    raise ValueError(f"manifest must contain 'pdb' and '{contig_col}' columns")
-  jobs = []
-  for _, row in df.iterrows():
-    pdb_path = str(row["pdb"]).strip()
-    contig_str = str(row[contig_col]).strip()
-    if len(pdb_path) == 0 or len(contig_str) == 0:
-      raise ValueError("manifest rows must have non-empty pdb and contig values")
-    jobs.append((pdb_path, contig_str))
-  return jobs
-
-def get_design_jobs(o):
-  if o.manifest is not None:
-    return load_design_manifest(o.manifest)
-  jobs = []
-  for m in range(o.num_designs):
-    if o.num_designs == 1:
-      pdb_filename = o.pdb
-    else:
-      pdb_filename = o.pdb.replace("_0.pdb",f"_{m}.pdb")
-    jobs.append((pdb_filename, o.contigs))
-  return jobs
-
-def setup_af_context(contigs, o, flags):
+def setup_af_context(contigs, *, copies, rm_aa, initial_guess, use_multimer, af_params_dir):
   chains = alphabet_list[:len(contigs)]
   info = [get_info(x) for x in contigs]
   fixed_pos = []
@@ -76,6 +48,12 @@ def setup_af_context(contigs, o, flags):
     free_chains += [free_chain and not fixed_chain]
     both_chains += [fixed_chain and free_chain]
 
+  flags = {"initial_guess":initial_guess,
+           "best_metric":"rmsd",
+           "use_multimer":use_multimer,
+           "model_names":["model_1_multimer_v3" if use_multimer else "model_1_ptm"],
+           "data_dir": af_params_dir}
+
   if sum(both_chains) == 0 and sum(fixed_chains) > 0 and sum(free_chains) > 0:
     protocol = "binder"
     print("protocol=binder")
@@ -87,7 +65,7 @@ def setup_af_context(contigs, o, flags):
     af_model = mk_af_model(protocol="binder",**flags)
     prep_flags = {"target_chain":",".join(target_chains),
                   "binder_chain":",".join(binder_chains),
-                  "rm_aa":o.rm_aa}
+                  "rm_aa":rm_aa}
   elif sum(fixed_pos) > 0:
     protocol = "partial"
     print("protocol=partial")
@@ -98,21 +76,21 @@ def setup_af_context(contigs, o, flags):
     prep_flags = {"chain":",".join(chains),
                   "rm_template":rm_template,
                   "rm_template_seq":rm_template,
-                  "copies":o.copies,
-                  "homooligomer":o.copies>1,
-                  "rm_aa":o.rm_aa}
+                  "copies":copies,
+                  "homooligomer":copies>1,
+                  "rm_aa":rm_aa}
   else:
     protocol = "fixbb"
     print("protocol=fixbb")
     af_model = mk_af_model(protocol="fixbb",**flags)
     prep_flags = {"chain":",".join(chains),
-                  "copies":o.copies,
-                  "homooligomer":o.copies>1,
-                  "rm_aa":o.rm_aa}
+                  "copies":copies,
+                  "homooligomer":copies>1,
+                  "rm_aa":rm_aa}
 
   if protocol == "binder":
     af_terms = ["plddt","i_ptm","i_pae","rmsd"]
-  elif o.copies > 1:
+  elif copies > 1:
     af_terms = ["plddt","ptm","i_ptm","pae","i_pae","rmsd"]
   else:
     af_terms = ["plddt","ptm","pae","rmsd"]
@@ -123,92 +101,92 @@ def setup_af_context(contigs, o, flags):
           "af_terms":af_terms,
           "fixed_pos":fixed_pos}
 
-def main(argv):
-  ag = parse_args()
-  ag.txt("-------------------------------------------------------------------------------------")
-  ag.txt("Designability Test")
-  ag.txt("-------------------------------------------------------------------------------------")
-  ag.txt("REQUIRED")
-  ag.txt("-------------------------------------------------------------------------------------")
-  ag.add(["loc="          ],  None,   str, ["location to save results"])
-  ag.txt("-------------------------------------------------------------------------------------")
-  ag.txt("INPUT (provide manifest OR pdb+contigs)")
-  ag.txt("-------------------------------------------------------------------------------------")
-  ag.add(["manifest="     ],  None,   str, ["csv with pdb,contig columns (one row per design)"])
-  ag.add(["pdb="          ],  None,   str, ["input pdb (legacy mode, use with _0/_1 naming)"])
-  ag.add(["contigs="      ],  None,   str, ["contig definition (legacy mode, shared across designs)"])
-  ag.txt("-------------------------------------------------------------------------------------")
-  ag.txt("OPTIONAL")
-  ag.txt("-------------------------------------------------------------------------------------")
-  ag.add(["copies="       ],         1,    int, ["number of repeating copies"])
-  ag.add(["num_seqs="     ],         8,    int, ["number of mpnn designs to evaluate"])
-  ag.add(["initial_guess" ],     False,   None, ["initialize previous coordinates"])
-  ag.add(["use_multimer"  ],     False,   None, ["use alphafold_multimer_v3"])
-  ag.add(["use_soluble"   ],     False,   None, ["use solubleMPNN"])
-  ag.add(["use_antibody"  ],     False,   None, ['use antibody MPNN from Dreyer Group'])
-  ag.add(["use_hyper"     ],     False,   None, ["use hyperMPNN from Meiler Lab"])
-  ag.add(["num_recycles=" ],         3,    int, ["number of recycles"])
-  ag.add(["rm_aa="],               "C",    str, ["disable specific amino acids from being sampled"])
-  ag.add(["num_designs="  ],         1,    int, ["number of designs to evaluate (legacy mode)"])
-  ag.add(["mpnn_sampling_temp=" ], 0.1,  float, ["sampling temperature used by proteinMPNN"])
-  ag.add(["af_params_dir=" ],      ".",    str, ["directory containing alphafold params"])
-  ag.txt("-------------------------------------------------------------------------------------")
-  o = ag.parse(argv)
+def run_designability_test(
+    loc,
+    pdbs,
+    contigs,
+    *,
+    copies=1,
+    num_seqs=8,
+    initial_guess=False,
+    use_multimer=False,
+    use_soluble=False,
+    use_antibody=False,
+    use_hyper=False,
+    num_recycles=3,
+    rm_aa="C",
+    mpnn_sampling_temp=0.1,
+    af_params_dir=".",
+):
+  """Run MPNN sequence design and AlphaFold2 validation for one or more PDBs.
 
-  if o.loc is None:
-    ag.usage("Missing Required Arguments")
+  Args:
+    loc: Output directory for results.
+    pdbs: List of input PDB paths, one per design.
+    contigs: List of contig strings, one per design (same length as pdbs).
+    copies: Number of repeating copies for fixbb protocol.
+    num_seqs: Number of MPNN sequences to evaluate per design.
+    initial_guess: Initialize AF2 from input coordinates.
+    use_multimer: Use AlphaFold multimer model.
+    use_soluble: Use soluble MPNN weights.
+    use_antibody: Use antibody MPNN weights.
+    use_hyper: Use hyper MPNN weights.
+    num_recycles: Number of AF2 recycles.
+    rm_aa: Amino acids to exclude from MPNN sampling (pass "" or None to allow all).
+    mpnn_sampling_temp: MPNN sampling temperature.
+    af_params_dir: Directory containing AlphaFold parameters.
 
-  if o.manifest is None and None in [o.pdb, o.contigs]:
-    ag.usage("Provide --manifest= or both --pdb= and --contigs=")
+  Returns:
+    pandas.DataFrame with per-sequence results. Also writes outputs under `loc`.
+  """
+  if len(pdbs) == 0:
+    raise ValueError("pdbs must contain at least one design")
+  if len(pdbs) != len(contigs):
+    raise ValueError(f"pdbs and contigs must have the same length ({len(pdbs)} vs {len(contigs)})")
 
-  if o.rm_aa == "":
-    o.rm_aa = None
+  pdbs = [str(p).strip() for p in pdbs]
+  contigs = [str(c).strip() for c in contigs]
+  if any(len(p) == 0 for p in pdbs) or any(len(c) == 0 for c in contigs):
+    raise ValueError("pdbs and contigs must be non-empty strings")
 
-  design_jobs = get_design_jobs(o)
-  if len(design_jobs) == 0:
-    ag.usage("No designs to evaluate")
+  if rm_aa == "":
+    rm_aa = None
 
-  flags = {"initial_guess":o.initial_guess,
-           "best_metric":"rmsd",
-           "use_multimer":o.use_multimer,
-           "model_names":["model_1_multimer_v3" if o.use_multimer else "model_1_ptm"],
-           "data_dir": o.af_params_dir}
+  os.makedirs(loc, exist_ok=True)
+  os.makedirs(f"{loc}/all_pdb", exist_ok=True)
 
-  batch_size = 8
-  if o.num_seqs < batch_size:
-    batch_size = o.num_seqs
+  batch_size = min(8, num_seqs)
 
   print("running proteinMPNN...")
-  sampling_temp = o.mpnn_sampling_temp
-
-  if o.use_soluble:
+  if use_soluble:
     weights = 'soluble'
-  elif o.use_antibody:
+  elif use_antibody:
     weights = 'antibody'
-  elif o.use_hyper:
+  elif use_hyper:
     weights = 'hyper'
   else:
     weights = 'original'
   print("Weights Used: ", weights)
-  mpnn_model = mk_mpnn_model(weights= weights)
+  mpnn_model = mk_mpnn_model(weights=weights)
 
   outs = []
-  pdbs = []
-  contigs_by_design = []
   contexts = []
-
-  #--- MPNN DESIGN LOOP (with probs saving) ---
-  for m,(pdb_filename,contig_str) in enumerate(design_jobs):
+  for m,(pdb_filename,contig_str) in enumerate(zip(pdbs, contigs)):
     print(f"design {m}: {pdb_filename}")
-    contigs = parse_contig_string(contig_str)
-    context = setup_af_context(contigs, o, flags)
+    parsed_contigs = parse_contig_string(contig_str)
+    context = setup_af_context(
+        parsed_contigs,
+        copies=copies,
+        rm_aa=rm_aa,
+        initial_guess=initial_guess,
+        use_multimer=use_multimer,
+        af_params_dir=af_params_dir,
+    )
     af_model = context["af_model"]
     protocol = context["protocol"]
     prep_flags = context["prep_flags"]
     fixed_pos = context["fixed_pos"]
 
-    pdbs.append(pdb_filename)
-    contigs_by_design.append(contig_str)
     contexts.append(context)
     af_model.prep_inputs(pdb_filename, **prep_flags)
     if protocol == "partial":
@@ -216,21 +194,17 @@ def main(argv):
       af_model.opt["fix_pos"] = p[p < af_model._len]
 
     mpnn_model.get_af_inputs(af_model)
-
-    # --- START of MPNN PROBS MODIFICATION ---
-    mpnn_output = mpnn_model.sample(
-        num=o.num_seqs//batch_size,
+    outs.append(mpnn_model.sample(
+        num=num_seqs//batch_size,
         batch=batch_size,
-        temperature=sampling_temp
-    )
-    outs.append(mpnn_output)
+        temperature=mpnn_sampling_temp,
+    ))
 
   data = []
   best = {"rmsd":np.inf,"design":0,"n":0}
   print("running AlphaFold...")
-  os.system(f"mkdir -p {o.loc}/all_pdb")
-  with open(f"{o.loc}/design.fasta","w") as fasta:
-    for m,(out,pdb_filename,contig_str,context) in enumerate(zip(outs,pdbs,contigs_by_design,contexts)):
+  with open(f"{loc}/design.fasta","w") as fasta:
+    for m,(out,pdb_filename,contig_str,context) in enumerate(zip(outs,pdbs,contigs,contexts)):
       af_model = context["af_model"]
       prep_flags = context["prep_flags"]
       protocol = context["protocol"]
@@ -242,9 +216,9 @@ def main(argv):
         p = np.where(fixed_pos)[0]
         af_model.opt["fix_pos"] = p[p < af_model._len]
       for k in af_terms: out[k] = []
-      for n in range(o.num_seqs):
+      for n in range(num_seqs):
         sub_seq = out["seq"][n].replace("/","")[-af_model._len:]
-        af_model.predict(seq=sub_seq, num_recycles=o.num_recycles, verbose=False)
+        af_model.predict(seq=sub_seq, num_recycles=num_recycles, verbose=False)
         for t in af_terms: out[t].append(af_model.aux["log"][t])
         if "i_pae" in out:
           out["i_pae"][-1] = out["i_pae"][-1] * 31
@@ -253,7 +227,7 @@ def main(argv):
         rmsd = out["rmsd"][-1]
         if rmsd < best["rmsd"]:
           best = {"design":m,"n":n,"rmsd":rmsd}
-        af_model.save_current_pdb(f"{o.loc}/all_pdb/design{m}_n{n}.pdb")
+        af_model.save_current_pdb(f"{loc}/all_pdb/design{m}_n{n}.pdb")
         af_model._save_results(save_best=True, verbose=False)
         af_model._k += 1
         score_line = [f'design:{m} n:{n}',f'mpnn:{out["score"][n]:.3f}']
@@ -267,16 +241,73 @@ def main(argv):
         for t in af_terms:
           row[t] = out[t][n]
         data.append(row)
-      af_model.save_pdb(f"{o.loc}/best_design{m}.pdb")
+      af_model.save_pdb(f"{loc}/best_design{m}.pdb")
 
-  # save best
-  with open(f"{o.loc}/best.pdb", "w") as handle:
+  with open(f"{loc}/best.pdb", "w") as handle:
     remark_text = f"design {best['design']} N {best['n']} RMSD {best['rmsd']:.3f}"
     handle.write(f"REMARK 001 {remark_text}\n")
-    handle.write(open(f"{o.loc}/best_design{best['design']}.pdb", "r").read())
+    handle.write(open(f"{loc}/best_design{best['design']}.pdb", "r").read())
 
   df = pd.DataFrame(data)
-  df.to_csv(f'{o.loc}/mpnn_results.csv')
+  df.to_csv(f'{loc}/mpnn_results.csv')
+  return df
+
+def main(argv):
+  ag = parse_args()
+  ag.txt("-------------------------------------------------------------------------------------")
+  ag.txt("Designability Test")
+  ag.txt("-------------------------------------------------------------------------------------")
+  ag.txt("REQUIRED")
+  ag.txt("-------------------------------------------------------------------------------------")
+  ag.add(["pdb="          ],  None,   str, ["input pdb"])
+  ag.add(["loc="          ],  None,   str, ["location to save results"])
+  ag.add(["contigs="      ],  None,   str, ["contig definition"])
+  ag.txt("-------------------------------------------------------------------------------------")
+  ag.txt("OPTIONAL")
+  ag.txt("-------------------------------------------------------------------------------------")
+  ag.add(["copies="       ],         1,    int, ["number of repeating copies"])
+  ag.add(["num_seqs="     ],         8,    int, ["number of mpnn designs to evaluate"])
+  ag.add(["initial_guess" ],     False,   None, ["initialize previous coordinates"])
+  ag.add(["use_multimer"  ],     False,   None, ["use alphafold_multimer_v3"])
+  ag.add(["use_soluble"   ],     False,   None, ["use solubleMPNN"])
+  ag.add(["use_antibody"  ],     False,   None, ['use antibody MPNN from Dreyer Group'])
+  ag.add(["use_hyper"     ],     False,   None, ["use hyperMPNN from Meiler Lab"])
+  ag.add(["num_recycles=" ],         3,    int, ["number of recycles"])
+  ag.add(["rm_aa="],               "C",    str, ["disable specific amino acids from being sampled"])
+  ag.add(["num_designs="  ],         1,    int, ["number of designs to evaluate"])
+  ag.add(["mpnn_sampling_temp=" ], 0.1,  float, ["sampling temperature used by proteinMPNN"])
+  ag.add(["af_params_dir=" ],      ".",    str, ["directory containing alphafold params"])
+  ag.txt("-------------------------------------------------------------------------------------")
+  o = ag.parse(argv)
+
+  if None in [o.pdb, o.loc, o.contigs]:
+    ag.usage("Missing Required Arguments")
+
+  pdbs, contigs = [], []
+  for m in range(o.num_designs):
+    if o.num_designs == 1:
+      pdb_filename = o.pdb
+    else:
+      pdb_filename = o.pdb.replace("_0.pdb", f"_{m}.pdb")
+    pdbs.append(pdb_filename)
+    contigs.append(o.contigs)
+
+  run_designability_test(
+      loc=o.loc,
+      pdbs=pdbs,
+      contigs=contigs,
+      copies=o.copies,
+      num_seqs=o.num_seqs,
+      initial_guess=o.initial_guess,
+      use_multimer=o.use_multimer,
+      use_soluble=o.use_soluble,
+      use_antibody=o.use_antibody,
+      use_hyper=o.use_hyper,
+      num_recycles=o.num_recycles,
+      rm_aa=o.rm_aa,
+      mpnn_sampling_temp=o.mpnn_sampling_temp,
+      af_params_dir=o.af_params_dir,
+  )
 
 if __name__ == "__main__":
    main(sys.argv[1:])
