@@ -274,7 +274,6 @@ def main(argv):
   ag.add(["use_hyper"     ],     False,   None, ["use hyperMPNN from Meiler Lab"])
   ag.add(["num_recycles=" ],         3,    int, ["number of recycles"])
   ag.add(["rm_aa="],               "C",    str, ["disable specific amino acids from being sampled"])
-  ag.add(["num_designs="  ],         1,    int, ["number of designs to evaluate"])
   ag.add(["mpnn_sampling_temp=" ], 0.1,  float, ["sampling temperature used by proteinMPNN"])
   ag.add(["af_params_dir=" ],      ".",    str, ["directory containing alphafold params"])
   ag.txt("-------------------------------------------------------------------------------------")
@@ -283,19 +282,10 @@ def main(argv):
   if None in [o.pdb, o.loc, o.contigs]:
     ag.usage("Missing Required Arguments")
 
-  pdbs, contigs = [], []
-  for m in range(o.num_designs):
-    if o.num_designs == 1:
-      pdb_filename = o.pdb
-    else:
-      pdb_filename = o.pdb.replace("_0.pdb", f"_{m}.pdb")
-    pdbs.append(pdb_filename)
-    contigs.append(o.contigs)
-
   run_designability_test(
       loc=o.loc,
-      pdbs=pdbs,
-      contigs=contigs,
+      pdbs=[o.pdb],
+      contigs=[o.contigs],
       copies=o.copies,
       num_seqs=o.num_seqs,
       initial_guess=o.initial_guess,
